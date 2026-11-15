@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DUSK STRIKE — Tactical FPS</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div id="game"></div>
+
+<!-- ============ HUD (visible while playing) ============ -->
+<div id="hud" hidden>
+  <div id="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
+  <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+  <div id="damage-vignette"></div>
+  <div id="damage-dir">▲</div>
+
+  <div id="topbar">
+    <div class="team guard"><span class="team-name">GUARD</span><span class="team-score" id="score-guard">0</span><span class="pips" id="pips-guard"></span></div>
+    <div id="timer-wrap"><div id="timer">1:40</div><div id="round-label">ROUND 1</div></div>
+    <div class="team raiders"><span class="pips" id="pips-raiders"></span><span class="team-score" id="score-raiders">0</span><span class="team-name">RAIDERS</span></div>
+  </div>
+  <div id="bomb-status" hidden><span id="bomb-text">BOMB CARRIED</span><div id="bomb-bar"><i></i></div></div>
+
+  <div id="killfeed"></div>
+
+  <div id="health-box">
+    <div id="health-num">100</div>
+    <div id="health-bar"><i></i></div>
+    <div id="armor-row"><span id="armor-label">ARMOR&nbsp;</span><span id="armor-num">0</span></div>
+    <div id="money">$800</div>
+  </div>
+
+  <div id="ammo-box">
+    <div id="weapon-name">P9 Pistol</div>
+    <div id="ammo"><span id="ammo-mag">12</span><span id="ammo-reserve">/ 48</span></div>
+    <div id="grenades"></div>
+  </div>
+
+  <div id="interact" hidden><span id="interact-text"></span><div id="interact-bar"><i></i></div></div>
+  <div id="buy-hint" hidden>Press <kbd>B</kbd> to buy</div>
+  <div id="round-banner" hidden><div id="banner-title"></div><div id="banner-sub"></div></div>
+  <div id="reload-hint" hidden>RELOADING…</div>
+</div>
+
+<!-- ============ LOADING ============ -->
+<div id="screen-loading" class="screen">
+  <div class="panel wide center">
+    <div class="logo">DUSK<span>STRIKE</span></div>
+    <div class="tagline">Pier 7 · Dusk Harbor · 3v3 Tactical FPS</div>
+    <div id="load-bar"><i></i></div>
+    <div id="load-status">Loading…</div>
+    <div id="load-tip"></div>
+  </div>
+</div>
+
+<!-- ============ MAIN MENU ============ -->
+<div id="screen-menu" class="screen" hidden>
+  <div class="panel wide">
+    <div class="logo">DUSK<span>STRIKE</span></div>
+    <div class="tagline">Pier 7 · Dusk Harbor · 3v3 Tactical FPS</div>
+    <p class="intro">Defend the cargo terminal. The RAIDERS are coming for Pier 7 at dusk —
+      stop the bomb, or lose the harbor.</p>
+    <div class="menu-buttons">
+      <button id="btn-play" class="btn primary" type="button">▶&nbsp; PLAY</button>
+      <button id="btn-howto" class="btn" type="button">HOW TO PLAY</button>
+      <button id="btn-settings" class="btn" type="button">SETTINGS</button>
+    </div>
+    <div class="foot">Best played with mouse + keyboard · Chrome / WebGL 2</div>
+  </div>
+</div>
+
+<!-- ============ HOW TO PLAY ============ -->
+<div id="screen-howto" class="screen" hidden>
+  <div class="panel wide">
+    <h1>How to Play</h1>
+    <h2>Objective</h2>
+    <p>You are GUARD. The RAIDERS carry a bomb: stop them planting it at Site A
+      (Warehouse) or Site B (Pier) — or defuse it before the 30-second fuse runs out.
+      Win a round by eliminating the enemy team, defusing the bomb, or holding the
+      sites until the clock runs out. First to 5 rounds wins the match.</p>
+    <h2>Controls</h2>
+    <ul class="keys">
+      <li><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span> Move</li>
+      <li><span><kbd>Mouse</kbd></span> Look</li>
+      <li><span><kbd>Click</kbd></span> Fire</li>
+      <li><span><kbd>R</kbd></span> Reload</li>
+      <li><span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span> Switch weapon</li>
+      <li><span><kbd>Q</kbd> / <kbd>Wheel</kbd></span> Next weapon</li>
+      <li><span><kbd>G</kbd></span> Throw grenade</li>
+      <li><span><kbd>Ctrl</kbd> / <kbd>C</kbd></span> Crouch</li>
+      <li><span><kbd>Shift</kbd></span> Sprint</li>
+      <li><span><kbd>B</kbd></span> Buy menu (buy phase only)</li>
+      <li><span><kbd>E</kbd> (hold)</kbd></span> Plant / defuse the bomb</li>
+      <li><span><kbd>Esc</kbd></span> Pause</li>
+    </ul>
+    <h2>Tips</h2>
+    <ul class="tips">
+      <li>Stop moving before you shoot — accuracy beats speed.</li>
+      <li>Headshots deal double damage.</li>
+      <li>Win a round: +$1600. A kill: +$200. Spend it in the buy menu.</li>
+      <li>Grenades are loud — every bot nearby hears the blast.</li>
+    </ul>
+    <button id="btn-howto-back" class="btn" type="button">← BACK</button>
+  </div>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div id="screen-settings" class="screen" hidden>
+  <div class="panel">
+    <h1>Settings</h1>
+    <label class="row">Mouse sensitivity <input id="set-sens" type="range" min="0.3" max="2.5" step="0.1"><output id="set-sens-v"></output></label>
+    <label class="row">Master volume <input id="set-master" type="range" min="0" max="1" step="0.05"><output id="set-master-v"></output></label>
+    <label class="row">Sound effects <input id="set-sfx" type="range" min="0" max="1" step="0.05"><output id="set-sfx-v"></output></label>
+    <label class="row">Graphics quality
+      <select id="set-quality"><option value="high">High (shadows)</option><option value="low">Low (fast)</option></select>
+    </label>
+    <label class="row check">Crosshair <input id="set-crosshair" type="checkbox"></label>
+    <button id="btn-settings-back" class="btn" type="button">← BACK</button>
+  </div>
+</div>
+
+<!-- ============ PAUSE ============ -->
+<div id="screen-pause" class="screen" hidden>
+  <div class="panel">
+    <h1>Paused</h1>
+    <div class="menu-buttons">
+      <button id="btn-resume" class="btn primary" type="button">RESUME</button>
+      <button id="btn-restart" class="btn" type="button">RESTART MATCH</button>
+      <button id="btn-pause-settings" class="btn" type="button">SETTINGS</button>
+      <button id="btn-menu" class="btn" type="button">MAIN MENU</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ BUY MENU ============ -->
+<div id="screen-buy" class="screen" hidden>
+  <div class="panel wide">
+    <h1>Buy Weapons <span id="buy-money">$800</span></h1>
+    <div id="buy-grid"></div>
+    <div class="foot">Buy phase ends in <span id="buy-time">10</span>s · Press <kbd>B</kbd> or <kbd>Esc</kbd> to close</div>
+  </div>
+</div>
+
+<!-- ============ ROUND END ============ -->
+<div id="screen-roundend" class="screen" hidden>
+  <div class="panel center">
+    <div id="roundend-title" class="big-title">GUARD WINS THE ROUND</div>
+    <div id="roundend-reason"></div>
+    <div id="roundend-score"></div>
+  </div>
+</div>
+
+<!-- ============ MATCH END ============ -->
+<div id="screen-matchend" class="screen" hidden>
+  <div class="panel center">
+    <div id="matchend-title" class="big-title">VICTORY</div>
+    <div id="matchend-score"></div>
+    <table id="matchend-stats"></table>
+    <div class="menu-buttons row">
+      <button id="btn-again" class="btn primary" type="button">PLAY AGAIN</button>
+      <button id="btn-matchend-menu" class="btn" type="button">MAIN MENU</button>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.min.js"
+  }
+}
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
