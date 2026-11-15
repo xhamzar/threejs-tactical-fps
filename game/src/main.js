@@ -37,6 +37,7 @@ let orbitT = 0;
 let shotDone = false;
 // Camera feel state: head bob, strafe lean, sprint FOV, crouch dip.
 let bobPhase = 0, prevCrouch = false, crouchDip = 0, fovCur = 75;
+let prevYaw = 0, prevSpeed = 0, turnRoll = 0, pitchKick = 0;
 let stepAcc = 0, lastLookDX = 0, lastLookDY = 0;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -119,10 +120,11 @@ async function init() {
       smoke: state.smoke.length,
       drawCalls: renderer ? renderer.info.render.calls : 0,
       triangles: renderer ? renderer.info.render.triangles : 0,
+      cam: { roll: +camera.rotation.z.toFixed(4), pitch: +camera.rotation.x.toFixed(4), y: +camera.position.y.toFixed(3) },
       throwables: (() => { const p = playerOf(state); return { ...p.throwables, selected: p.throwable, kit: p.defuseKit }; })(),
       fighters: state.fighters.map((f) => ({
         name: f.name, team: f.team, alive: f.alive, hp: Math.round(f.hp),
-        x: +f.pos.x.toFixed(1), z: +f.pos.z.toFixed(1),
+        x: +f.pos.x.toFixed(1), y: +f.pos.y.toFixed(2), z: +f.pos.z.toFixed(1),
         ai: f.ai ? f.ai.state : 'player', money: f.money || 0,
         mag: f.weapons[f.current].mag, reserve: f.weapons[f.current].reserve,
         kills: f.kills, deaths: f.deaths,
@@ -384,6 +386,7 @@ function sim(dt) {
   let speed = 0;
   if (state.phase === 'playing' && p.alive && !frozen) {
     speed = updatePlayer(p, input, tick, dt, world, state.settings.sensitivity);
+    if (p.landed) { p.landed = false; sounds.land(); }
     lastLookDX = tick.dx; lastLookDY = tick.dy;
     // Footsteps + sprint dust, paced by distance travelled.
     if (speed > 2.5) {
@@ -472,22 +475,34 @@ function syncCamera(dt) {
   }
   const eye = eyePos(p);
   const speed = Math.hypot(p.vel.x, p.vel.z);
-  // Head bob: two steps per cycle, stronger when sprinting, softer crouched.
-  if (speed > 0.5 && p.alive) bobPhase += dt * (4 + speed * 1.4);
+  // Bob synced to the footstep cycle (a step every 2.4 m): one dip per step,
+  // amplitude follows speed, a second harmonic keeps it from feeling metronomic.
+  if (speed > 0.5 && p.alive && p.grounded) bobPhase += dt * speed * 1.31;
   const speedK = Math.min(1, speed / 5.5);
   const bobAmp = speedK * (p.crouching ? 0.008 : 0.02);
-  const bobY = Math.sin(bobPhase * 2) * bobAmp;
+  const bobY = Math.sin(bobPhase * 2) * bobAmp + Math.sin(bobPhase * 4 + 1.3) * bobAmp * 0.25;
+  const idle = speed < 0.5 && p.alive && p.grounded;
+  const breath = idle ? Math.sin(state.time * 1.4) * 0.006 : 0; // idle breathing
   // Crouch dip: a small extra drop the moment you duck.
   if (p.crouching && !prevCrouch) crouchDip = 0.09;
   prevCrouch = p.crouching;
   crouchDip = Math.max(0, crouchDip - dt * 0.35);
-  camera.position.set(eye.x, p.alive ? eye.y + bobY - crouchDip : 0.6, eye.z);
+  p.landDip *= 1 - Math.min(1, dt * 6); // landing dip springs back up
+  camera.position.set(eye.x, p.alive ? eye.y + bobY + breath - crouchDip - p.landDip : 0.6, eye.z);
+  // Turn roll (body banks into fast turns) + pitch kick (lean into accel).
+  if (dt > 0) {
+    const yawVel = (p.yaw - prevYaw) / dt;
+    turnRoll += (Math.max(-0.03, Math.min(0.03, yawVel * 0.012)) - turnRoll) * Math.min(1, dt * 8);
+    const accel = (speed - prevSpeed) / dt;
+    pitchKick += (Math.max(-0.025, Math.min(0.025, -accel * 0.002)) - pitchKick) * Math.min(1, dt * 8);
+  }
+  prevYaw = p.yaw; prevSpeed = speed;
   camera.rotation.y = p.yaw;
-  camera.rotation.x = p.pitch;
-  // Strafe lean + bob roll: the camera tilts into sideways movement.
+  camera.rotation.x = p.pitch + pitchKick;
+  // Strafe lean (stronger) + turn roll + bob roll + breathing roll.
   const strafeVel = p.vel.x * Math.cos(p.yaw) - p.vel.z * Math.sin(p.yaw);
-  const lean = Math.max(-0.02, Math.min(0.02, -strafeVel * 0.004));
-  camera.rotation.z = lean + Math.sin(bobPhase) * 0.003 * speedK;
+  const lean = Math.max(-0.03, Math.min(0.03, -strafeVel * 0.005));
+  camera.rotation.z = lean + turnRoll + Math.sin(bobPhase) * 0.003 * speedK + (idle ? Math.sin(state.time * 0.9) * 0.0015 : 0);
   // Sprint FOV kick: a touch wider while sprinting, eased back after.
   const fovTarget = p.sprinting && speed > 4.5 ? 79 : 75;
   fovCur += (fovTarget - fovCur) * Math.min(1, dt * 6);

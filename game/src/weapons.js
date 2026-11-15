@@ -169,9 +169,10 @@ export function updateViewModel(vm, f, dt, speed, firing, lookDX = 0, lookDY = 0
   // Look sway: the gun lags a hair behind fast mouse flicks, then settles.
   vm.swayX += ((-lookDX * 0.00035) - vm.swayX) * Math.min(1, dt * 10);
   vm.swayY += ((lookDY * 0.00035) - vm.swayY) * Math.min(1, dt * 10);
-  vm.group.position.y = -0.26 + Math.sin(vm.bobT * 2) * bobAmp + vm.swayY;
+  vm.group.position.y = -0.26 + Math.sin(vm.bobT * 2) * bobAmp + vm.swayY - (f.landDip || 0) * 0.6;
   vm.group.position.x = 0.28 + Math.cos(vm.bobT) * bobAmp * 0.6 + vm.swayX;
-  vm.group.rotation.z = vm.swayX * 0.35;
+  const sv = f.vel.x * Math.cos(f.yaw) - f.vel.z * Math.sin(f.yaw); // strafe tilt
+  vm.group.rotation.z = vm.swayX * 0.35 - sv * 0.004;
   const w = WEAPONS[f.current];
   if (firing) vm.kick = (w ? w.kick : 0.03) * 1.8;
   vm.kick = Math.max(0, vm.kick - dt * 0.5);

@@ -45,8 +45,9 @@ export const ROUND = {
 export const MOVER = {
   radius: 0.35, height: 1.75, eyeStand: 1.62, eyeCrouch: 1.05,
   walk: 4.3, sprint: 5.8, crouch: 2.2,
-  accel: 7.5, // speeding up: weighty, not instant
+  accel: 8, accelKick: 12, // two-phase: quick first step, then weighty settle
   decel: 6.5, // stopping: momentum carries you a step further
+  jump: 6.5, gravity: 20,
   strafe: 0.92, // sidestepping is a touch slower than running forward
   friction: 10,
 };

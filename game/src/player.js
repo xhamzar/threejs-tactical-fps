@@ -13,7 +13,7 @@ export function createFighter({ team, name, isPlayer = false, x = 0, z = 0, yaw 
     alive: true, hp: 100, armor: 0,
     pos: new THREE.Vector3(x, 0, z),
     vel: new THREE.Vector3(),
-    yaw, pitch: 0,
+    yaw, pitch: 0, vy: 0, grounded: true, landDip: 0,
     crouching: false, eyeHeight: MOVER.eyeStand,
     weapons: { pistol: { mag: WEAPONS.pistol.mag, reserve: WEAPONS.pistol.reserve } },
     current: 'pistol',
@@ -71,7 +71,8 @@ function resolveAxis(f, world, r, isX) {
 // speeding up takes a beat, and stopping carries momentum for a step.
 // Exponential approach, so it is frame-rate independent.
 export function accelerate(f, wishX, wishZ, dt) {
-  const rate = (wishX !== 0 || wishZ !== 0) ? MOVER.accel : MOVER.decel;
+  let rate = (wishX !== 0 || wishZ !== 0) ? MOVER.accel : MOVER.decel;
+  if (rate === MOVER.accel && Math.hypot(f.vel.x, f.vel.z) < Math.hypot(wishX, wishZ) * 0.7) rate = MOVER.accelKick;
   const k = 1 - Math.exp(-rate * dt);
   f.vel.x += (wishX - f.vel.x) * k;
   f.vel.z += (wishZ - f.vel.z) * k;
@@ -97,6 +98,17 @@ export function updatePlayer(f, input, tick, dt, world, sensitivity) {
   const wishZ = (-cos * fwd - sin * str) * speed;
   accelerate(f, fwd || str ? wishX : 0, fwd || str ? wishZ : 0, dt);
   moveFighter(f, dt, world);
+  // Jump (Space) + gravity: feet leave the ground, landing dips the camera.
+  if (tick.pressed.has('Space') && f.grounded) { f.vy = MOVER.jump; f.grounded = false; }
+  if (!f.grounded) {
+    f.vy -= MOVER.gravity * dt;
+    f.pos.y += f.vy * dt;
+    if (f.pos.y <= 0) {
+      f.pos.y = 0; f.grounded = true;
+      f.landDip = Math.min(0.11, Math.max(0.03, -f.vy * 0.014));
+      f.landed = true; f.vy = 0;
+    }
+  }
   return Math.hypot(f.vel.x, f.vel.z);
 }
 

@@ -88,6 +88,7 @@ export class SoundBank {
     this.tone({ f0: 90, f1: 30, dur: 0.6, gain: 0.7, type: 'sine' });
   }
   step() { this.noise({ dur: 0.05, freq: 500, gain: 0.05 }); }
+  land() { this.noise({ dur: 0.09, freq: 300, gain: 0.2 }); }
   hitmarker(head) { this.tone({ f0: head ? 1600 : 1100, dur: 0.05, gain: 0.15, type: 'sine' }); }
   beep() { this.tone({ f0: 980, dur: 0.12, gain: 0.2, type: 'square' }); }
   plant() { this.beep(); this.tone({ f0: 660, dur: 0.15, gain: 0.2, type: 'square', when: 0.15 }); }

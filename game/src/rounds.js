@@ -38,6 +38,7 @@ export function startRound(state) {
     const [sx, sz] = spawns[f._spawnIdx % spawns.length];
     f.pos.set(sx, 0, sz);
     f.vel.set(0, 0, 0);
+    f.vy = 0; f.grounded = true; f.landDip = 0;
     f.yaw = f.team === 'guard' ? -Math.PI / 2 : Math.PI / 2;
     f.pitch = 0;
     f.alive = true;
