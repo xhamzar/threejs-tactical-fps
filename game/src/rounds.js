@@ -44,7 +44,7 @@ export function startRound(state) {
     f.alive = true;
     f.hp = 100;
     f.interact = 0; f.interactKind = null;
-    f.reloading = 0; f.bloom = 0; f.cooldown = 0;
+    f.reloading = 0; f.bloom = 0; f.cooldown = 0; f.sprayIdx = 0;
     if (f._diedLastRound) {
       // Death costs your kit: back to the pistol.
       f.weapons = { pistol: { mag: WEAPONS.pistol.mag, reserve: WEAPONS.pistol.reserve } };

@@ -1,31 +1,32 @@
 // DUSK STRIKE — tuning constants. One file holds every number the game
 // balances on, so the judge (and a later tweak) finds them in one place.
+// falloff: [full-damage range, damage mult at max range]; pat: spray-pattern phase.
 export const WEAPONS = {
   pistol: {
     name: 'P9 Pistol', price: 0, damage: 34, headMult: 2, rpm: 320,
     mag: 12, reserve: 48, reload: 1.4, spread: 0.006, moveSpread: 0.02,
-    recoil: 0.011, auto: false, range: 60, kick: 0.02,
+    recoil: 0.011, auto: false, range: 60, kick: 0.02, falloff: [15, 0.5], pat: 0.4,
   },
   rifle: {
     name: 'AR-7 Rifle', price: 2500, damage: 30, headMult: 2, rpm: 600,
     mag: 30, reserve: 90, reload: 2.2, spread: 0.008, moveSpread: 0.045,
-    recoil: 0.016, auto: true, range: 90, kick: 0.035,
+    recoil: 0.016, auto: true, range: 90, kick: 0.035, falloff: [25, 0.6], pat: 1.7,
   },
   smg: {
     name: 'K-9 SMG', price: 1500, damage: 22, headMult: 2, rpm: 820,
     mag: 32, reserve: 96, reload: 1.9, spread: 0.012, moveSpread: 0.03,
-    recoil: 0.01, auto: true, range: 45, kick: 0.022,
+    recoil: 0.01, auto: true, range: 45, kick: 0.022, falloff: [10, 0.4], pat: 3.1,
   },
   shotgun: {
     name: 'SG-12 Shotgun', price: 2200, damage: 11, headMult: 1.5, rpm: 75,
     mag: 6, reserve: 24, reload: 2.6, spread: 0.02, moveSpread: 0.03,
-    recoil: 0.045, auto: false, range: 28, kick: 0.09,
+    recoil: 0.045, auto: false, range: 28, kick: 0.09, falloff: [8, 0.2], pat: 0,
     pellets: 8, pelletSpread: 0.05, // 8 pellets per shell, wide cone
   },
   dmr: {
     name: 'VK-7 Marksman', price: 3200, damage: 72, headMult: 2.5, rpm: 95,
     mag: 8, reserve: 32, reload: 2.8, spread: 0.0015, moveSpread: 0.07,
-    recoil: 0.05, auto: false, range: 130, kick: 0.08,
+    recoil: 0.05, auto: false, range: 130, kick: 0.08, falloff: [50, 0.8], pat: 2.4,
   },
 };
 export const GRENADE = { name: 'Frag Grenade', price: 300, damage: 95, radius: 6.5, fuse: 1.6 };

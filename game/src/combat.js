@@ -70,6 +70,13 @@ function hitSpheres(f) {
   ];
 }
 
+// Damage falloff: full damage to d0, linear down to m1 at max range.
+export function falloffMult(w, d) {
+  const fo = w.falloff || [0, 1];
+  if (d <= fo[0]) return 1;
+  return 1 + (fo[1] - 1) * Math.min(1, (d - fo[0]) / (w.range - fo[0]));
+}
+
 export function resolveShot(state, world, shooter, shot) {
   const w = WEAPONS[shot.weapon];
   const maxDist = w.range;
@@ -87,7 +94,7 @@ export function resolveShot(state, world, shooter, shot) {
   };
   if (!best) return { hit: false, end, wall: wallDist < maxDist };
   const mult = best.part === 'head' ? w.headMult : best.part === 'legs' ? 0.8 : 1;
-  const died = applyDamage(best.victim, w.damage * mult);
+  const died = applyDamage(best.victim, w.damage * mult * falloffMult(w, bestT));
   emit(state, 'hit', { shooter, victim: best.victim, head: best.part === 'head', died });
   if (died) emit(state, 'kill', { shooter, victim: best.victim, weapon: shot.weapon, head: best.part === 'head' });
   return { hit: true, end, victim: best.victim, head: best.part === 'head', died };

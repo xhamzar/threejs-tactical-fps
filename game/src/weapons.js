@@ -9,12 +9,25 @@ function gauss() { return (Math.random() + Math.random() + Math.random() - 1.5) 
 
 const FUSES = { frag: GRENADE.fuse, smoke: SMOKE.fuse, flash: FLASH.fuse };
 
+// Fixed spray pattern: deterministic per-shot offsets from the shot index,
+// so a spray can be learned (CS-style). Semi-auto guns stay near-vertical.
+export function recoilPattern(w, n) {
+  const ph = w.pat || 0;
+  return {
+    p: 1 + 0.25 * Math.sin(n * 0.8 + ph),
+    y: (w.auto ? 1 : 0.25) * Math.sin(n * 0.55 + ph * 1.3),
+  };
+}
+
 // One trigger pull. Returns a shot {ox,oy,oz,dx,dy,dz,weapon} or null.
 export function tryFire(state, f, wantFire, dt, speed) {
   const w = WEAPONS[f.current];
   if (!w || f.reloading > 0 || !f.alive) return null;
   f.cooldown -= dt;
-  if (!wantFire || f.cooldown > 0) return null;
+  if (!wantFire || f.cooldown > 0) {
+    if (!wantFire) { f.sprayIdle += dt; if (f.sprayIdle > 0.3) f.sprayIdx = 0; }
+    return null;
+  }
   const ammo = f.weapons[f.current];
   if (!ammo || ammo.mag <= 0) {
     f.cooldown = 0.25;
@@ -23,6 +36,8 @@ export function tryFire(state, f, wantFire, dt, speed) {
   }
   f.cooldown = 60 / w.rpm;
   ammo.mag -= 1;
+  f.sprayIdle = 0;
+  const n = f.sprayIdx++;
   f.bloom = Math.min(1, f.bloom + (f.current === 'rifle' ? 0.14 : f.current === 'shotgun' ? 0.35 : 0.09));
   // Spread: base + movement + bloom; crouching steadies the shot.
   const move = Math.min(1, speed / 5.5);
@@ -36,10 +51,11 @@ export function tryFire(state, f, wantFire, dt, speed) {
   const right = new THREE.Vector3(-cy, 0, sy);
   const up = new THREE.Vector3().crossVectors(right, dir).normalize();
   dir.addScaledVector(right, gauss() * spread).addScaledVector(up, gauss() * spread).normalize();
-  // Recoil: pitch kick (player feels it; bots carry it as bloom only).
+  // Recoil: fixed spray pattern + small jitter (player only; bots: bloom only).
   if (f.isPlayer) {
-    f.pitch = Math.min(1.5, f.pitch + w.recoil * (0.7 + Math.random() * 0.6));
-    f.yaw += gauss() * w.recoil * 0.3;
+    const rp = recoilPattern(w, n);
+    f.pitch = Math.min(1.5, f.pitch + w.recoil * rp.p * (0.9 + Math.random() * 0.2));
+    f.yaw += w.recoil * 0.3 * rp.y + gauss() * w.recoil * 0.05;
   }
   f.flash = 0.045;
   const shot = { ox: eye.x, oy: eye.y, oz: eye.z, dx: dir.x, dy: dir.y, dz: dir.z, weapon: f.current };
@@ -53,6 +69,7 @@ export function startReload(state, f) {
   if (!w || !ammo || f.reloading > 0 || ammo.reserve <= 0 || ammo.mag >= w.mag) return false;
   f.reloading = w.reload;
   f.reloadWeapon = f.current;
+  f.sprayIdx = 0;
   return true;
 }
 
@@ -76,6 +93,7 @@ export function switchWeapon(state, f, id) {
   f.current = id;
   f.reloading = 0;
   f.reloadWeapon = null;
+  f.sprayIdx = 0;
   f.cooldown = Math.max(f.cooldown, 0.15);
   return true;
 }

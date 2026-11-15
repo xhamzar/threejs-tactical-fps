@@ -21,6 +21,7 @@ export function createFighter({ team, name, isPlayer = false, x = 0, z = 0, yaw 
     throwable: 'frag', // selected type (G throws it, T cycles it)
     defuseKit: false, // Guard only: halves defuse time
     cooldown: 0, reloading: 0, reloadWeapon: null, bloom: 0,
+    sprayIdx: 0, sprayIdle: 0, // fixed spray pattern: shot index in this spray
     money: 0, kills: 0, deaths: 0,
     mesh: null, // set by the mesh builder in main.js
     // bot-only fields, ignored for the player
