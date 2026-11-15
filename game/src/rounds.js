@@ -1,7 +1,7 @@
 // DUSK STRIKE — rounds, money and the bomb. A round is buy (10s) then live
 // (100s): it ends by elimination, detonation, defusal or the clock. Winners
 // take $1600, losers $800, kills pay $200 on the spot. First to 5 wins.
-import { ROUND, ECONOMY, WEAPONS, GRENADE, ARMOR_PRICE, ARMOR_VALUE } from './config.js';
+import { ROUND, ECONOMY, WEAPONS, GRENADE, SMOKE, FLASH, DEFUSE_KIT, ARMOR_PRICE, ARMOR_VALUE } from './config.js';
 import { emit, aliveOf } from './state.js';
 import { giveWeapon } from './player.js';
 
@@ -15,7 +15,9 @@ export function startMatch(state) {
     f.money = ECONOMY.start;
     f.weapons = { pistol: { mag: WEAPONS.pistol.mag, reserve: WEAPONS.pistol.reserve } };
     f.current = 'pistol';
-    f.grenades = 0;
+    f.throwables = { frag: 0, smoke: 0, flash: 0 };
+    f.throwable = 'frag';
+    f.defuseKit = false;
     f.kills = 0; f.deaths = 0;
   }
   startRound(state);
@@ -28,6 +30,7 @@ export function startRound(state) {
   state.roundResult = null;
   state.grenades.length = 0;
   state.noise.length = 0;
+  state.smoke.length = 0;
   const site = Math.random() < 0.5 ? 'A' : 'B';
   const world = state._world;
   for (const f of state.fighters) {
@@ -45,7 +48,9 @@ export function startRound(state) {
       // Death costs your kit: back to the pistol.
       f.weapons = { pistol: { mag: WEAPONS.pistol.mag, reserve: WEAPONS.pistol.reserve } };
       f.current = 'pistol';
-      f.grenades = 0;
+      f.throwables = { frag: 0, smoke: 0, flash: 0 };
+      f.throwable = 'frag';
+      f.defuseKit = false;
       f.armor = 0;
     }
     f._diedLastRound = false;
@@ -58,11 +63,17 @@ export function startRound(state) {
       f.ai.state = 'buy';
       f.ai.target = null;
       f.ai.path = [];
+      f.ai.blindUntil = 0;
       if (f.team === 'raiders') {
         f.ai.site = site;
         // Bots arm up as the match goes on.
         if (state.round >= 2 && !f.weapons.rifle) giveWeapon(f, 'rifle');
-        if (state.round >= 3 && f.ai.role === 'attacker' && f.grenades === 0) f.grenades = 1;
+        if (state.round >= 3 && f.ai.role === 'attacker' && f.id % 2 === 0 && !f.weapons.shotgun) giveWeapon(f, 'shotgun');
+        if (state.round >= 3 && f.ai.role === 'attacker' && f.throwables.frag === 0) f.throwables.frag = 1;
+      } else {
+        // Guards pick up a marksman rifle and a defuse kit later on.
+        if (state.round >= 4 && f.ai.site === 'A' && !f.weapons.dmr) giveWeapon(f, 'dmr');
+        if (state.round >= 3) f.defuseKit = true;
       }
     }
   }
@@ -96,10 +107,20 @@ export function buyItem(state, f, item) {
     f.armor = ARMOR_VALUE;
     return true;
   }
-  if (item === 'grenade') {
-    if (f.money < GRENADE.price || f.grenades >= 2) return false;
-    f.money -= GRENADE.price;
-    f.grenades += 1;
+  if (item === 'defusekit') {
+    if (f.team !== 'guard' || f.defuseKit || f.money < DEFUSE_KIT.price) return false;
+    f.money -= DEFUSE_KIT.price;
+    f.defuseKit = true;
+    return true;
+  }
+  const throwable = { grenade: ['frag', GRENADE.price], smoke: ['smoke', SMOKE.price], flash: ['flash', FLASH.price] }[item];
+  if (throwable) {
+    const [kind, price] = throwable;
+    const total = f.throwables.frag + f.throwables.smoke + f.throwables.flash;
+    if (f.money < price || total >= 3 || f.throwables[kind] >= 2) return false;
+    f.money -= price;
+    f.throwables[kind] += 1;
+    f.throwable = kind;
     return true;
   }
   const w = WEAPONS[item];
@@ -168,15 +189,18 @@ export function updateRounds(state, world, dt) {
           bomb.timer = ROUND.fuseTime;
           bomb.planter = f;
           f.interact = 0; f.interactKind = null;
+          f.money += ECONOMY.plant; // planting pays, win or lose
           emit(state, 'bombPlanted', { site: bomb.site });
         }
       } else f.interact = 0;
     } else if (f.interactKind === 'defuse' && bomb.state === 'planted' && f.team === 'guard') {
       const s = world.sites[bomb.site];
       if (Math.hypot(f.pos.x - s.x, f.pos.z - s.z) < s.r + 0.5) {
-        f.interact += dt / ROUND.defuseTime;
+        const defuseTime = ROUND.defuseTime * (f.defuseKit ? DEFUSE_KIT.timeMult : 1);
+        f.interact += dt / defuseTime;
         if (f.interact >= 1) {
           f.interact = 0; f.interactKind = null;
+          f.money += ECONOMY.defuse; // defusing pays
           endRound(state, 'guard', 'Bomb defused');
           return;
         }

@@ -1,7 +1,7 @@
 // DUSK STRIKE — screens: loading, main menu, how to play, settings, pause,
 // buy menu, round end, match end. One show() switches screens; the buy
 // grid is rendered from the weapon config so prices never drift from code.
-import { WEAPONS, GRENADE, ARMOR_PRICE, TIPS } from './config.js';
+import { WEAPONS, GRENADE, SMOKE, FLASH, DEFUSE_KIT, ARMOR_PRICE, TIPS } from './config.js';
 import { saveSettings } from './state.js';
 
 function $(id) { return document.getElementById(id); }
@@ -11,7 +11,12 @@ const SCREENS = ['loading', 'menu', 'howto', 'settings', 'pause', 'buy', 'rounde
 const BUY_ITEMS = [
   { id: 'rifle', name: 'AR-7 Rifle', desc: 'High damage, heavy recoil. The workhorse.', price: WEAPONS.rifle.price },
   { id: 'smg', name: 'K-9 SMG', desc: 'Very fast fire rate, best up close.', price: WEAPONS.smg.price },
+  { id: 'shotgun', name: 'SG-12 Shotgun', desc: '8 pellets per shell. Devastating up close.', price: WEAPONS.shotgun.price },
+  { id: 'dmr', name: 'VK-7 Marksman', desc: 'Huge damage, near-perfect accuracy. Slow fire.', price: WEAPONS.dmr.price },
   { id: 'grenade', name: 'Frag Grenade', desc: 'Area damage. Loud — bots hear it.', price: GRENADE.price },
+  { id: 'smoke', name: 'Smoke Grenade', desc: 'Blocks sight for 12s. Bots cannot see through.', price: SMOKE.price },
+  { id: 'flash', name: 'Flashbang', desc: 'Blinds anyone looking at the pop.', price: FLASH.price },
+  { id: 'defusekit', name: 'Defuse Kit', desc: 'Defuse the bomb twice as fast.', price: DEFUSE_KIT.price },
   { id: 'armor', name: 'Kevlar Armor', desc: 'Absorbs half of incoming damage.', price: ARMOR_PRICE },
 ];
 
@@ -96,7 +101,15 @@ export class Menus {
     const grid = $('buy-grid');
     grid.innerHTML = '';
     for (const item of BUY_ITEMS) {
-      const owned = item.id === 'armor' ? player.armor > 0 : item.id === 'grenade' ? player.grenades >= 2 : !!player.weapons[item.id];
+      const t = player.throwables || { frag: 0, smoke: 0, flash: 0 };
+      const total = t.frag + t.smoke + t.flash;
+      let owned;
+      if (item.id === 'armor') owned = player.armor > 0;
+      else if (item.id === 'defusekit') owned = !!player.defuseKit;
+      else if (item.id === 'grenade') owned = t.frag >= 2 || total >= 3;
+      else if (item.id === 'smoke') owned = t.smoke >= 2 || total >= 3;
+      else if (item.id === 'flash') owned = t.flash >= 2 || total >= 3;
+      else owned = !!player.weapons[item.id];
       const afford = player.money >= item.price;
       const div = document.createElement('div');
       div.className = `buy-item${owned ? ' owned' : ''}${!owned && !afford ? ' disabled' : ''}`;

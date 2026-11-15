@@ -15,7 +15,21 @@ node serve.ts
 
 ## Controls
 
-WASD move · mouse look · click fire · R reload · 1/2/3 switch weapon · G grenade · Ctrl/C crouch · Shift sprint · B buy menu · E (hold) defuse the bomb · Esc pause.
+WASD move · mouse look · click fire · R reload · 1/2/3/4/5 switch weapon · G throw (selected throwable) · T cycle throwable (frag / smoke / flash) · Ctrl/C crouch · Shift sprint · B buy menu · E (hold) defuse the bomb · Esc pause.
+
+## Arsenal & gear
+
+- **P9 Pistol** (free) · **AR-7 Rifle** $2500 · **K-9 SMG** $1500 · **SG-12 Shotgun** $2200 — 8 pellets per shell, devastating up close · **VK-7 Marksman DMR** $3200 — huge damage, near-perfect accuracy, slow fire.
+- **Frag grenade** $300 · **Smoke grenade** $350 — blocks sight for 12 s, bots cannot see through · **Flashbang** $250 — blinds anyone looking at the pop · **Defuse Kit** $400 (GUARD only) — defuse twice as fast · **Kevlar** $650.
+- Planting pays +$300, defusing +$300, a kill +$200, winning a round +$1600.
+
+## The map — Pier 7
+
+A dusk harbor: Warehouse A, the pier, container lanes, and three flanks — the west alley, the pier flank, and a mid-south connector. Bots navigate a 33-node waypoint graph and use the flanks to attack; smoke them off or hold the angles.
+
+## Feel
+
+Weighted movement (acceleration / deceleration, strafe lean, head bob, sprint FOV kick, crouch dip), per-weapon view models with sway and kick, dust, blood, muzzle smoke, impact sparks, smoke clouds and flash pops — all pooled, with the static map merged into a handful of draw calls.
 
 ## How it is built
 

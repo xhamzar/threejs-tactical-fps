@@ -67,7 +67,15 @@ export class SoundBank {
     const g = distant ? 0.12 : 0.5;
     if (kind === 'pistol') { this.noise({ dur: 0.09, freq: 2400, gain: g }); this.tone({ f0: 220, f1: 60, dur: 0.08, gain: g * 0.5, type: 'square' }); }
     else if (kind === 'rifle') { this.noise({ dur: 0.11, freq: 1600, gain: g }); this.tone({ f0: 160, f1: 50, dur: 0.1, gain: g * 0.6, type: 'square' }); }
+    else if (kind === 'shotgun') { this.noise({ dur: 0.22, freq: 900, gain: g * 1.2 }); this.tone({ f0: 120, f1: 35, dur: 0.2, gain: g * 0.8, type: 'square' }); }
+    else if (kind === 'dmr') { this.noise({ dur: 0.16, freq: 3200, gain: g, type: 'bandpass', q: 0.7 }); this.tone({ f0: 300, f1: 70, dur: 0.14, gain: g * 0.7, type: 'square' }); }
     else { this.noise({ dur: 0.07, freq: 3000, gain: g * 0.8, type: 'bandpass', q: 0.8 }); }
+  }
+
+  smokeHiss() { this.noise({ dur: 1.2, freq: 5000, gain: 0.12, type: 'highpass' }); }
+  flashRing() {
+    this.noise({ dur: 0.12, freq: 4000, gain: 0.7, type: 'bandpass', q: 1 });
+    this.tone({ f0: 3200, f1: 2800, dur: 0.9, gain: 0.1, type: 'sine' });
   }
 
   dryFire() { this.tone({ f0: 1200, dur: 0.03, gain: 0.08, type: 'square' }); }

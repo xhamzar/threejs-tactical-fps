@@ -16,7 +16,10 @@ export function createFighter({ team, name, isPlayer = false, x = 0, z = 0, yaw 
     yaw, pitch: 0,
     crouching: false, eyeHeight: MOVER.eyeStand,
     weapons: { pistol: { mag: WEAPONS.pistol.mag, reserve: WEAPONS.pistol.reserve } },
-    current: 'pistol', grenades: 0,
+    current: 'pistol',
+    throwables: { frag: 0, smoke: 0, flash: 0 }, // counts per grenade type
+    throwable: 'frag', // selected type (G throws it, T cycles it)
+    defuseKit: false, // Guard only: halves defuse time
     cooldown: 0, reloading: 0, reloadWeapon: null, bloom: 0,
     money: 0, kills: 0, deaths: 0,
     mesh: null, // set by the mesh builder in main.js
@@ -64,10 +67,11 @@ function resolveAxis(f, world, r, isX) {
   }
 }
 
-// Accelerate toward a wish velocity (feet/sec): fast approach when moving,
-// friction decay when idle. Exponential, so it is frame-rate independent.
+// Accelerate toward a wish velocity (feet/sec): weighty on purpose —
+// speeding up takes a beat, and stopping carries momentum for a step.
+// Exponential approach, so it is frame-rate independent.
 export function accelerate(f, wishX, wishZ, dt) {
-  const rate = (wishX !== 0 || wishZ !== 0) ? 10 : MOVER.friction;
+  const rate = (wishX !== 0 || wishZ !== 0) ? MOVER.accel : MOVER.decel;
   const k = 1 - Math.exp(-rate * dt);
   f.vel.x += (wishX - f.vel.x) * k;
   f.vel.z += (wishZ - f.vel.z) * k;
@@ -83,7 +87,10 @@ export function updatePlayer(f, input, tick, dt, world, sensitivity) {
 
   const { f: fwd, s: str } = input.axis();
   const sprint = input.held('ShiftLeft') && !f.crouching && fwd > 0;
-  const speed = f.crouching ? MOVER.crouch : sprint ? MOVER.sprint : MOVER.walk;
+  let speed = f.crouching ? MOVER.crouch : sprint ? MOVER.sprint : MOVER.walk;
+  // Sidestepping is a touch slower than running straight ahead.
+  if (fwd === 0 && str !== 0) speed *= MOVER.strafe;
+  f.sprinting = sprint && speed > 0;
   const sin = Math.sin(f.yaw), cos = Math.cos(f.yaw);
   // Forward is -Z rotated by yaw; right is +X rotated by yaw.
   const wishX = (-sin * fwd + cos * str) * speed;

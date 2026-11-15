@@ -16,12 +16,26 @@ export const WEAPONS = {
     mag: 32, reserve: 96, reload: 1.9, spread: 0.012, moveSpread: 0.03,
     recoil: 0.01, auto: true, range: 45, kick: 0.022,
   },
+  shotgun: {
+    name: 'SG-12 Shotgun', price: 2200, damage: 11, headMult: 1.5, rpm: 75,
+    mag: 6, reserve: 24, reload: 2.6, spread: 0.02, moveSpread: 0.03,
+    recoil: 0.045, auto: false, range: 28, kick: 0.09,
+    pellets: 8, pelletSpread: 0.05, // 8 pellets per shell, wide cone
+  },
+  dmr: {
+    name: 'VK-7 Marksman', price: 3200, damage: 72, headMult: 2.5, rpm: 95,
+    mag: 8, reserve: 32, reload: 2.8, spread: 0.0015, moveSpread: 0.07,
+    recoil: 0.05, auto: false, range: 130, kick: 0.08,
+  },
 };
 export const GRENADE = { name: 'Frag Grenade', price: 300, damage: 95, radius: 6.5, fuse: 1.6 };
+export const SMOKE = { name: 'Smoke Grenade', price: 350, radius: 4.5, duration: 12, fuse: 1.4 };
+export const FLASH = { name: 'Flashbang', price: 250, radius: 13, blindTime: 3, fuse: 1.2 };
+export const DEFUSE_KIT = { name: 'Defuse Kit', price: 400, timeMult: 0.5 }; // Guard only: defuse twice as fast
 export const ARMOR_PRICE = 650;
 export const ARMOR_VALUE = 50; // absorbs half of incoming damage while it lasts
 
-export const ECONOMY = { start: 800, kill: 200, win: 1600, loss: 800 };
+export const ECONOMY = { start: 800, kill: 200, win: 1600, loss: 800, plant: 300, defuse: 300 };
 
 export const ROUND = {
   buyTime: 10, roundTime: 100, intermission: 4,
@@ -30,7 +44,11 @@ export const ROUND = {
 
 export const MOVER = {
   radius: 0.35, height: 1.75, eyeStand: 1.62, eyeCrouch: 1.05,
-  walk: 4.3, sprint: 5.8, crouch: 2.2, accel: 42, friction: 10,
+  walk: 4.3, sprint: 5.8, crouch: 2.2,
+  accel: 7.5, // speeding up: weighty, not instant
+  decel: 6.5, // stopping: momentum carries you a step further
+  strafe: 0.92, // sidestepping is a touch slower than running forward
+  friction: 10,
 };
 
 export const TEAM = {
@@ -55,6 +73,10 @@ export const TIPS = [
   'Hold E near a bomb site to plant — or to defuse.',
   'Crouch (Ctrl) to steady your aim and hide behind cover.',
   'Grenades are loud: every bot nearby hears the blast.',
+  'Smoke blocks sight — bots cannot see through it. Use it to cross.',
+  'A flashbang blinds anyone looking at it. Turn away, or strike first.',
+  'A Defuse Kit halves defuse time. Worth every dollar on Guard.',
+  'The SG-12 rules close quarters; the VK-7 owns long sightlines.',
   'Win the round, earn $1600. A kill alone pays $200.',
   'The bomb ticks for 30 seconds once planted. Defuse takes 5.',
 ];

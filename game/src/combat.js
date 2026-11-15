@@ -1,10 +1,11 @@
 // DUSK STRIKE — hitscan combat and grenades. A shot is a ray: walls stop
 // it, fighters are three spheres (head, chest, legs) — headshots pay double.
-// Grenades are little ballistic bodies with a fuse; their blast hurts in a
-// radius and rings every bot's ears.
-import { WEAPONS, GRENADE } from './config.js';
+// The shotgun fires a cone of pellets, one ray each. Grenades are little
+// ballistic bodies with a fuse: frags blast, smoke blooms into a cloud that
+// blinds bot sight, flashbangs blind anyone looking at the pop.
+import { WEAPONS, GRENADE, SMOKE, FLASH } from './config.js';
 import { applyDamage } from './player.js';
-import { rayHitWorld } from './world.js';
+import { rayHitWorld, hasLineOfSight } from './world.js';
 import { emit } from './state.js';
 import { tryFire } from './weapons.js';
 
@@ -14,9 +15,39 @@ export function fireFighter(state, world, f, wantFire, dt, speed) {
   const shot = tryFire(state, f, wantFire, dt, speed);
   if (!shot) return;
   if (shot.dry) { emit(state, 'dryfire', { fighter: f }); return; }
-  const result = resolveShot(state, world, f, shot);
-  addNoise(state, f.pos.x, f.pos.z, 24);
+  const w = WEAPONS[shot.weapon];
+  const result = shot.pellets
+    ? resolvePellets(state, world, f, shot, w)
+    : resolveShot(state, world, f, shot);
+  addNoise(state, f.pos.x, f.pos.z, shot.weapon === 'shotgun' ? 30 : 24);
   emit(state, 'shotFired', { fighter: f, shot, result });
+}
+
+// Shotgun: one ray per pellet, each jittered inside the pellet cone. The
+// tracer follows the first pellet; damage stacks per pellet that lands.
+function resolvePellets(state, world, shooter, shot, w) {
+  let first = null;
+  for (let i = 0; i < shot.pellets; i++) {
+    const d = jitterDir(shot.dx, shot.dy, shot.dz, w.pelletSpread);
+    const r = resolveShot(state, world, shooter, { ...shot, dx: d.x, dy: d.y, dz: d.z });
+    if (!first) first = r;
+  }
+  return first || { hit: false, end: { x: shot.ox, y: shot.oy, z: shot.oz } };
+}
+
+// Jitter a unit direction by a small random cone (plain math, no THREE).
+function jitterDir(dx, dy, dz, amount) {
+  let rx = -dz, ry = 0, rz = dx; // right = dir x up(0,1,0)
+  const rl = Math.hypot(rx, ry, rz) || 1;
+  rx /= rl; ry /= rl; rz /= rl;
+  // up2 = right x dir
+  const ux = ry * dz - rz * dy, uy = rz * dx - rx * dz, uz = rx * dy - ry * dx;
+  const g = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+  let nx = dx + rx * g() * amount + ux * g() * amount;
+  let ny = dy + ry * g() * amount + uy * g() * amount;
+  let nz = dz + rz * g() * amount + uz * g() * amount;
+  const l = Math.hypot(nx, ny, nz) || 1;
+  return { x: nx / l, y: ny / l, z: nz / l };
 }
 
 function raySphere(ox, oy, oz, dx, dy, dz, cx, cy, cz, r) {
@@ -87,20 +118,73 @@ export function updateGrenades(state, world, dt) {
     if (g.fuse > 0) continue;
     state.grenades.splice(i, 1);
     if (g.mesh) { g.mesh.parent?.remove(g.mesh); }
-    emit(state, 'explosion', { x: g.x, y: g.y, z: g.z, owner: g.owner });
-    addNoise(state, g.x, g.z, 30);
-    for (const f of state.fighters) {
-      if (!f.alive) continue;
-      const d = Math.hypot(f.pos.x - g.x, f.pos.z - g.z);
-      if (d > GRENADE.radius) continue;
-      const dmg = GRENADE.damage * (1 - (d / GRENADE.radius) * 0.7);
-      const died = applyDamage(f, dmg);
-      if (died && f !== g.owner) emit(state, 'kill', { shooter: g.owner, victim: f, weapon: 'grenade', head: false });
-      else if (f !== g.owner) emit(state, 'hit', { shooter: g.owner, victim: f, head: false, died: false });
+    if (g.kind === 'smoke') {
+      // Bloom into a lingering cloud: bots cannot see through it.
+      state.smoke.push({ x: g.x, y: 0.9, z: g.z, r: SMOKE.radius, until: state.time + SMOKE.duration });
+      emit(state, 'smoke', { x: g.x, y: 0.9, z: g.z });
+      addNoise(state, g.x, g.z, 12);
+    } else if (g.kind === 'flash') {
+      emit(state, 'flash', { x: g.x, y: g.y, z: g.z, owner: g.owner });
+      addNoise(state, g.x, g.z, 30);
+      blindFromFlash(state, world, g);
+    } else {
+      emit(state, 'explosion', { x: g.x, y: g.y, z: g.z, owner: g.owner });
+      addNoise(state, g.x, g.z, 30);
+      for (const f of state.fighters) {
+        if (!f.alive) continue;
+        const d = Math.hypot(f.pos.x - g.x, f.pos.z - g.z);
+        if (d > GRENADE.radius) continue;
+        const dmg = GRENADE.damage * (1 - (d / GRENADE.radius) * 0.7);
+        const died = applyDamage(f, dmg);
+        if (died && f !== g.owner) emit(state, 'kill', { shooter: g.owner, victim: f, weapon: 'grenade', head: false });
+        else if (f !== g.owner) emit(state, 'hit', { shooter: g.owner, victim: f, head: false, died: false });
+      }
     }
   }
-  // Expire old noise.
+  // Expire old noise and smoke.
   for (let i = state.noise.length - 1; i >= 0; i--) {
     if (state.noise[i].until < state.time) state.noise.splice(i, 1);
   }
+  for (let i = state.smoke.length - 1; i >= 0; i--) {
+    if (state.smoke[i].until < state.time) state.smoke.splice(i, 1);
+  }
+}
+
+// A flashbang blinds every fighter with a clear line of sight to the pop,
+// friend or foe — the owner included. Bots lose their target while blind;
+// the player's screen whites out (handled by the HUD flash event).
+function blindFromFlash(state, world, g) {
+  for (const f of state.fighters) {
+    if (!f.alive) continue;
+    const d = Math.hypot(f.pos.x - g.x, f.pos.z - g.z);
+    if (d > FLASH.radius) continue;
+    const eye = { x: f.pos.x, y: f.pos.y + 1.5, z: f.pos.z };
+    if (!hasLineOfSight(world, eye.x, eye.y, eye.z, g.x, g.y, g.z)) continue;
+    // Facing away halves the effect; staring straight at it is the worst.
+    const facing = { x: -Math.sin(f.yaw), z: -Math.cos(f.yaw) };
+    const toFlash = { x: (g.x - f.pos.x) / (d || 1), z: (g.z - f.pos.z) / (d || 1) };
+    const facingDot = facing.x * toFlash.x + facing.z * toFlash.z;
+    const strength = Math.max(0.25, (facingDot + 1) / 2) * (1 - (d / FLASH.radius) * 0.5);
+    const blindTime = FLASH.blindTime * strength;
+    if (f.ai) {
+      f.ai.blindUntil = state.time + blindTime;
+      f.ai.target = null;
+    } else if (f.isPlayer) {
+      emit(state, 'playerFlashed', { strength });
+    }
+  }
+}
+
+// True when the segment between two points crosses any live smoke cloud.
+export function blockedBySmoke(state, ax, ay, az, bx, by, bz) {
+  for (const s of state.smoke) {
+    // Closest point on the segment to the sphere center.
+    const abx = bx - ax, aby = by - ay, abz = bz - az;
+    const len2 = abx * abx + aby * aby + abz * abz || 1;
+    let t = ((s.x - ax) * abx + (s.y - ay) * aby + (s.z - az) * abz) / len2;
+    t = Math.max(0, Math.min(1, t));
+    const cx = ax + abx * t, cy = ay + aby * t, cz = az + abz * t;
+    if (Math.hypot(s.x - cx, s.y - cy, s.z - cz) < s.r) return true;
+  }
+  return false;
 }

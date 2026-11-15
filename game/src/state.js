@@ -12,6 +12,7 @@ export function createState() {
     buyLeft: 0,
     fighters: [], // player + 5 bots, same shape
     grenades: [],
+    smoke: [], // {x, y, z, r, until} — live smoke clouds that block bot sight
     noise: [], // {x, z, radius, until} — gunfire bots can hear
     bomb: { state: 'carried', site: null, carrier: null, x: 0, z: 0, timer: 0, planter: null },
     stats: { kills: 0, deaths: 0, shots: 0, hits: 0, headshots: 0, roundsWon: 0 },

@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { TEAM, MOVER } from './config.js';
 import { eyePos, accelerate, moveFighter } from './player.js';
 import { hasLineOfSight, nearestWaypoint, findPath } from './world.js';
-import { fireFighter } from './combat.js';
+import { fireFighter, blockedBySmoke } from './combat.js';
 import { startReload, updateReload } from './weapons.js';
 
 const FOV_COS = Math.cos(1.05); // ~60 degrees half-angle
@@ -25,7 +25,7 @@ export function createBotAI(role, site) {
     aimErr: 0.06, aimYaw: 0, aimPitch: 0,
     strafeDir: 1, strafeAt: 0, crouchDuel: false,
     holdYaw: 0, scanDir: 1,
-    heard: null,
+    heard: null, blindUntil: 0, // flashbang: cannot see until this time
   };
 }
 
@@ -35,9 +35,10 @@ function objectiveWaypoint(state, world, f) {
   if (f.team === 'raiders') {
     if (state.bomb.state === 'planted') return ai.site === 'A' ? 20 : 25;
     if (ai.role === 'carrier') return ai.site === 'A' ? 20 : 25;
-    // Attackers take the long way round to the same site.
-    if (ai.site === 'A') return f.id % 2 ? 9 : 21;
-    return f.id % 2 ? 18 : 24;
+    // Attackers take the long way round to the same site — including the
+    // new west alley (30) and pier flank (31) added in v3.
+    if (ai.site === 'A') return f.id % 3 === 0 ? 30 : f.id % 2 ? 9 : 21;
+    return f.id % 3 === 0 ? 31 : f.id % 2 ? 18 : 24;
   }
   // Guards: one holds each site, drifting toward mid when the bomb is up.
   if (state.bomb.state === 'planted') return state.bomb.site === 'A' ? 20 : 25;
@@ -59,15 +60,21 @@ function canSee(world, f, enemy) {
   if (dist > SEE_DIST) return false;
   const facing = { x: -Math.sin(f.yaw), z: -Math.cos(f.yaw) };
   if ((facing.x * dx + facing.z * dz) / (dist || 1) < FOV_COS) return false;
-  return hasLineOfSight(world, eye.x, eye.y, eye.z, enemy.pos.x, enemy.pos.y + 1.1, enemy.pos.z);
+  if (!hasLineOfSight(world, eye.x, eye.y, eye.z, enemy.pos.x, enemy.pos.y + 1.1, enemy.pos.z)) return false;
+  return true;
 }
 
 function pickTarget(state, world, f) {
+  if (state.time < (f.ai.blindUntil || 0)) return null; // flashbanged
+  const eye = eyePos(f);
   let best = null, bd = Infinity;
   for (const e of state.fighters) {
     if (e.team === f.team || !e.alive) continue;
     const d = (e.pos.x - f.pos.x) ** 2 + (e.pos.z - f.pos.z) ** 2;
-    if (d < bd && canSee(world, f, e)) { bd = d; best = e; }
+    if (d >= bd || !canSee(world, f, e)) continue;
+    // Smoke clouds block bot sight — the whole point of a smoke grenade.
+    if (blockedBySmoke(state, eye.x, eye.y, eye.z, e.pos.x, e.pos.y + 1.1, e.pos.z)) continue;
+    bd = d; best = e;
   }
   // Stick to the current target unless the new one is clearly closer —
   // otherwise the bot flip-flops between two enemies and never fires.
@@ -260,5 +267,7 @@ export function buildBotMesh(team) {
   gun.position.set(0.22, 1.22, -0.32);
   g.add(torso, head, helmet, legL, legR, gun);
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  // Legs swing while walking (animated in main.js syncMeshes).
+  g.userData = { legL, legR, torso, walkPhase: Math.random() * 6 };
   return g;
 }

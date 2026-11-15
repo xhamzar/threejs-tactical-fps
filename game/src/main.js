@@ -13,7 +13,7 @@ import { SoundBank } from './audio.js';
 import { buildWorld } from './world.js';
 import { Input } from './input.js';
 import { createFighter, updatePlayer, eyePos, giveWeapon } from './player.js';
-import { startReload, updateReload, switchWeapon, throwGrenade, buildViewModel, updateViewModel } from './weapons.js';
+import { startReload, updateReload, switchWeapon, throwGrenade, cycleThrowable, buildViewModel, updateViewModel } from './weapons.js';
 import { fireFighter, updateGrenades } from './combat.js';
 import { Effects } from './effects.js';
 import { createBotAI, updateBot, buildBotMesh } from './bots.js';
@@ -35,6 +35,9 @@ let renderer, scene, camera, world, hud, menus, effects, viewModel;
 let bombMesh, bombLight;
 let orbitT = 0;
 let shotDone = false;
+// Camera feel state: head bob, strafe lean, sprint FOV, crouch dip.
+let bobPhase = 0, prevCrouch = false, crouchDip = 0, fovCur = 75;
+let stepAcc = 0, lastLookDX = 0, lastLookDY = 0;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -113,6 +116,10 @@ async function init() {
       bomb: state.bomb.state, bombSite: state.bomb.site, menu: menus.current,
       buyLeft: +state.buyLeft.toFixed(1), stats: { ...state.stats },
       pointerLocked: !!document.pointerLockElement,
+      smoke: state.smoke.length,
+      drawCalls: renderer ? renderer.info.render.calls : 0,
+      triangles: renderer ? renderer.info.render.triangles : 0,
+      throwables: (() => { const p = playerOf(state); return { ...p.throwables, selected: p.throwable, kit: p.defuseKit }; })(),
       fighters: state.fighters.map((f) => ({
         name: f.name, team: f.team, alive: f.alive, hp: Math.round(f.hp),
         x: +f.pos.x.toFixed(1), z: +f.pos.z.toFixed(1),
@@ -288,13 +295,24 @@ function wireEvents() {
     sounds.shot(shot.weapon, fighter !== p && dist > 12);
     if (fighter === p) state.stats.shots++;
     effects.tracer({ x: shot.ox, y: shot.oy, z: shot.oz }, result.end);
-    if (result.hit || result.wall) effects.sparksAt(result.end, result.hit ? 7 : 4);
+    effects.muzzleSmoke({ x: shot.ox, y: shot.oy, z: shot.oz });
+    if (result.hit) { effects.bloodAt(result.end, 5); effects.sparksAt(result.end, 4); }
+    else if (result.wall) effects.sparksAt(result.end, 4);
   });
   on(state, 'dryfire', ({ fighter }) => { if (fighter.isPlayer) sounds.dryFire(); });
   on(state, 'explosion', ({ x, y, z }) => {
     effects.explosion({ x, y, z });
     sounds.explosion();
   });
+  on(state, 'smoke', ({ x, y, z }) => {
+    effects.smokeCloud({ x, y, z });
+    sounds.smokeHiss();
+  });
+  on(state, 'flash', ({ x, y, z }) => {
+    effects.flashAt({ x, y, z });
+    sounds.flashRing();
+  });
+  on(state, 'playerFlashed', ({ strength }) => hud.flash(strength));
 }
 
 // ---- Screenshot staging (?shot=...) ----
@@ -316,6 +334,7 @@ function stageShot() {
   menus.show('none');
   if (SHOT === 'buy') {
     state.buyLeft = 8;
+    p.money = 4000; // stage with a full wallet so every new item shows priced
     openBuy();
     syncOnce();
     return;
@@ -325,7 +344,7 @@ function stageShot() {
   state.timeLeft = 85;
   for (const f of bots) { f.ai.state = 'move'; f.ai.path = []; }
   if (SHOT === 'combat') {
-    giveWeapon(p, 'rifle');
+    giveWeapon(p, 'shotgun');
     p.pos.set(-5.5, 0, 2.5); p.yaw = -Math.PI / 2; p.pitch = 0;
     raiders[0].pos.set(2, 0, 0); raiders[0].yaw = Math.PI / 2;
     raiders[1].pos.set(7, 0, -3); raiders[1].yaw = Math.PI / 2;
@@ -365,21 +384,35 @@ function sim(dt) {
   let speed = 0;
   if (state.phase === 'playing' && p.alive && !frozen) {
     speed = updatePlayer(p, input, tick, dt, world, state.settings.sensitivity);
+    lastLookDX = tick.dx; lastLookDY = tick.dy;
+    // Footsteps + sprint dust, paced by distance travelled.
+    if (speed > 2.5) {
+      stepAcc += speed * dt;
+      if (stepAcc > 2.4) {
+        stepAcc = 0;
+        sounds.step();
+        if (p.sprinting) effects.dustAt({ x: p.pos.x, y: 0, z: p.pos.z }, 1);
+      }
+    }
     if (tick.pressed.has('KeyR')) { if (startReload(state, p)) sounds.reload(); }
     if (tick.pressed.has('Digit1')) switchWeapon(state, p, 'pistol');
     if (tick.pressed.has('Digit2')) switchWeapon(state, p, 'rifle');
     if (tick.pressed.has('Digit3')) switchWeapon(state, p, 'smg');
+    if (tick.pressed.has('Digit4')) switchWeapon(state, p, 'shotgun');
+    if (tick.pressed.has('Digit5')) switchWeapon(state, p, 'dmr');
     if (tick.pressed.has('KeyQ') || tick.wheel !== 0) {
       const owned = Object.keys(p.weapons);
       const i = owned.indexOf(p.current);
       switchWeapon(state, p, owned[(i + 1) % owned.length]);
     }
+    if (tick.pressed.has('KeyT')) cycleThrowable(p);
     if (tick.pressed.has('KeyG')) {
       const g = throwGrenade(state, p);
       if (g) {
+        const colors = { frag: 0x2a2a22, smoke: 0x3a4a3a, flash: 0x9a9a92 };
         g.mesh = new THREE.Mesh(
           new THREE.SphereGeometry(0.09, 8, 8),
-          new THREE.MeshStandardMaterial({ color: 0x2a2a22, roughness: 0.6, metalness: 0.4 }),
+          new THREE.MeshStandardMaterial({ color: colors[g.kind] ?? 0x2a2a22, roughness: 0.6, metalness: 0.4 }),
         );
         g.mesh.position.set(g.x, g.y, g.z);
         scene.add(g.mesh);
@@ -438,10 +471,31 @@ function syncCamera(dt) {
     return;
   }
   const eye = eyePos(p);
-  camera.position.set(eye.x, p.alive ? eye.y : 0.6, eye.z);
+  const speed = Math.hypot(p.vel.x, p.vel.z);
+  // Head bob: two steps per cycle, stronger when sprinting, softer crouched.
+  if (speed > 0.5 && p.alive) bobPhase += dt * (4 + speed * 1.4);
+  const speedK = Math.min(1, speed / 5.5);
+  const bobAmp = speedK * (p.crouching ? 0.008 : 0.02);
+  const bobY = Math.sin(bobPhase * 2) * bobAmp;
+  // Crouch dip: a small extra drop the moment you duck.
+  if (p.crouching && !prevCrouch) crouchDip = 0.09;
+  prevCrouch = p.crouching;
+  crouchDip = Math.max(0, crouchDip - dt * 0.35);
+  camera.position.set(eye.x, p.alive ? eye.y + bobY - crouchDip : 0.6, eye.z);
   camera.rotation.y = p.yaw;
   camera.rotation.x = p.pitch;
-  updateViewModel(viewModel, p, dt, Math.hypot(p.vel.x, p.vel.z), input.fireHeld);
+  // Strafe lean + bob roll: the camera tilts into sideways movement.
+  const strafeVel = p.vel.x * Math.cos(p.yaw) - p.vel.z * Math.sin(p.yaw);
+  const lean = Math.max(-0.02, Math.min(0.02, -strafeVel * 0.004));
+  camera.rotation.z = lean + Math.sin(bobPhase) * 0.003 * speedK;
+  // Sprint FOV kick: a touch wider while sprinting, eased back after.
+  const fovTarget = p.sprinting && speed > 4.5 ? 79 : 75;
+  fovCur += (fovTarget - fovCur) * Math.min(1, dt * 6);
+  if (Math.abs(camera.fov - fovCur) > 0.05) {
+    camera.fov = fovCur;
+    camera.updateProjectionMatrix();
+  }
+  updateViewModel(viewModel, p, dt, speed, input.fireHeld, lastLookDX, lastLookDY);
 }
 
 function syncMeshes(dt) {
@@ -452,6 +506,22 @@ function syncMeshes(dt) {
       f.mesh.rotation.set(0, f.yaw, 0);
       f.mesh.scale.y = f.crouching ? 0.78 : 1;
       f._deathT = 0;
+      // Walk cycle: legs swing with speed, torso leans into the run.
+      const u = f.mesh.userData;
+      if (u && u.legL) {
+        const speed = Math.hypot(f.vel.x, f.vel.z);
+        if (speed > 0.5) {
+          u.walkPhase += dt * (4 + speed * 1.2);
+          const swing = Math.sin(u.walkPhase) * 0.5 * Math.min(1, speed / 4);
+          u.legL.rotation.x = swing;
+          u.legR.rotation.x = -swing;
+          u.torso.rotation.x = Math.min(1, speed / 5) * 0.08;
+        } else {
+          u.legL.rotation.x *= 0.8;
+          u.legR.rotation.x *= 0.8;
+          u.torso.rotation.x *= 0.8;
+        }
+      }
     } else {
       // Fall over and stay down until the next round.
       f._deathT = Math.min(1, (f._deathT || 0) + dt * 3);

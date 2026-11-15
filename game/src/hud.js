@@ -15,7 +15,7 @@ export class HUD {
       'bomb-status', 'bomb-text', 'killfeed', 'health-num', 'health-bar', 'armor-num',
       'money', 'weapon-name', 'ammo-mag', 'ammo-reserve', 'grenades',
       'interact', 'interact-text', 'buy-hint', 'round-banner', 'banner-title',
-      'banner-sub', 'reload-hint']) {
+      'banner-sub', 'reload-hint', 'flash-overlay']) {
       this.el[id] = $(id);
     }
     this.bombBar = document.querySelector('#bomb-bar i');
@@ -25,6 +25,7 @@ export class HUD {
     this.bannerTimer = 0;
     this.hitTimer = 0;
     this.dmgTimer = 0;
+    this.flashLevel = 0; // 0..1 white-out from a flashbang
   }
 
   set(id, text) {
@@ -52,7 +53,13 @@ export class HUD {
     this.set('ammo-mag', ammo ? String(ammo.mag) : '0');
     this.set('ammo-reserve', ammo ? `/ ${ammo.reserve}` : '');
     this.el['ammo-mag'].classList.toggle('empty', !ammo || ammo.mag === 0);
-    this.set('grenades', player.grenades > 0 ? `Grenades: ${player.grenades}` : '');
+    // Throwables: counts per type, the selected one in brackets.
+    const th = player.throwables || { frag: 0, smoke: 0, flash: 0 };
+    const sel = player.throwable || 'frag';
+    const fmt = (kind, label) => `${sel === kind ? '[' : ''}${label} ${th[kind]}${sel === kind ? ']' : ''}`;
+    const parts = [fmt('frag', 'Frag'), fmt('smoke', 'Smoke'), fmt('flash', 'Flash')];
+    if (player.defuseKit) parts.push('DEFUSE KIT');
+    this.set('grenades', parts.join(' · '));
     this.el['reload-hint'].hidden = player.reloading <= 0;
     // Score / timer
     this.set('score-guard', String(s.score.guard));
@@ -99,6 +106,16 @@ export class HUD {
         this.el['damage-dir'].style.opacity = 0;
       }
     }
+    // Flashbang white-out fades over ~2.5 seconds.
+    if (this.flashLevel > 0) {
+      this.flashLevel = Math.max(0, this.flashLevel - dt * 0.4);
+      this.el['flash-overlay'].style.opacity = this.flashLevel.toFixed(2);
+    }
+  }
+
+  flash(strength) {
+    this.flashLevel = Math.max(this.flashLevel, Math.min(1, strength));
+    this.el['flash-overlay'].style.opacity = this.flashLevel.toFixed(2);
   }
 
   setPips(id, team) {
